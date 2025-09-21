@@ -1,0 +1,1 @@
+lighteval vllm "model_name=Qwen/Qwen3-8B" ./examples/tasks/slovak_tasks.txt --custom-tasks ./community_tasks/slovak_evals.py
