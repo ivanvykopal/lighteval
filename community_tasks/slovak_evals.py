@@ -30,20 +30,26 @@ Author:
 """
 
 from functools import partial
+
 from lighteval.metrics.dynamic_metrics import (
     LogLikelihoodAccMetric,
 )
+from lighteval.metrics.metrics import Metrics
 from lighteval.metrics.normalizations import LogProbCharNorm, LogProbPMINorm, LogProbTokenNorm
 from lighteval.tasks.multilingual.tasks import MMLU_SUBSETS
 from lighteval.tasks.multilingual.utils.task_utils import get_metrics_for_formulation
 from lighteval.tasks.templates.hellaswag import get_hellaswag_prompt_function
 from lighteval.tasks.templates.multichoice import get_mcq_prompt_function
 
+from lighteval.tasks.templates.nli import get_nli_prompt_function
 from lighteval.tasks.templates.utils.formulation import CFFormulation, HybridFormulation, MCFFormulation
 from lighteval.utils.language import Language
 from lighteval.tasks.default_prompts import LETTER_INDICES
+import lighteval.tasks.default_prompts as prompt
 from lighteval.tasks.lighteval_task import LightevalTaskConfig
 from langcodes import standardize_tag
+from lighteval.tasks.requests import Doc
+
 
 # Hellaswag from ligtheval/mulitlingual
 mlmm_hellaswag_tasks = [
@@ -77,6 +83,9 @@ mlmm_hellaswag_tasks = [
     for formulation in [MCFFormulation(), CFFormulation(), HybridFormulation()]
 ]
 
+def mmlu_filter(subset, line):
+    return line["id"].split("/")[0] == subset
+
 # MMLU from ligtheval/mulitlingual
 mlmm_mmlu_tasks = [
     LightevalTaskConfig(
@@ -94,7 +103,8 @@ mlmm_mmlu_tasks = [
         hf_repo="jon-tow/okapi_mmlu",
         hf_subset=standardize_tag(Language.SLOVAK.value),
         hf_revision="refs/pr/1",
-        hf_filter=partial(lambda subset, line: line["id"].split("/")[0] == subset, subset),
+        # hf_filter=partial(lambda subset, line: line["id"].split("/")[0] == subset, subset),
+        hf_filter=partial(mmlu_filter, subset),
         evaluation_splits=("test",),
         few_shots_split="dev",
         metrics=get_metrics_for_formulation(
@@ -154,7 +164,7 @@ mlmm_arc_challenge_tasks = [
 # TruthfulQA from ligtheval/mulitlingual
 mlmm_truthfulqa_tasks = [
     LightevalTaskConfig(
-        name=f"mlmm_truthfulqa_{Language.SLOVAK.value}_{formulation.name.lower()}:{subset}",
+        name=f"community_mlmm_truthfulqa_{Language.SLOVAK.value}_{formulation.name.lower()}:{subset}",
         prompt_function=get_mcq_prompt_function(
             Language.SLOVAK,
             partial(
@@ -167,7 +177,7 @@ mlmm_truthfulqa_tasks = [
             ),
             formulation=formulation,
         ),
-        suite=("lighteval",),
+        suite=("community",),
         hf_repo="jon-tow/okapi_truthfulqa",
         hf_subset=standardize_tag(Language.SLOVAK.value),
         hf_revision="cdd5db1a66fd04105622109d1c2a5cbc8cde7586",
@@ -189,9 +199,89 @@ mlmm_truthfulqa_tasks = [
     ]
 ]
 
+def skanli(line, task_name: str = None):
+    return Doc(
+        task_name=task_name,
+        query=f"{line['premise']}\nOtázka: {line['hypothesis']} Áno, Nie, or Žiaden?\nOdpoveď:",
+        choices=[" Áno", " Žiaden", " Nie"],
+        gold_index=int(line["label"]),
+    )
+
+sk_anli_lighteval = LightevalTaskConfig(
+    name="community_anli_slk",
+    suite=["community"],
+    prompt_function=prompt.anli,
+    hf_repo="ivykopal/anli_sk",
+    hf_subset="default",
+    hf_avail_splits=["train", "validation", "test"],
+    evaluation_splits=["test"],
+    few_shots_split="train",
+    few_shots_select="random_sampling_from_train",
+    generation_size=5,
+    metrics=[Metrics.loglikelihood_acc],
+    stop_sequence=["\n"],
+    trust_dataset=True,
+    version=0,
+)
+
+anli_lighteval_slovak_prompt = LightevalTaskConfig(
+    name="community_anli_sk_prompt",
+    suite=("community",),
+    prompt_function=skanli,
+    hf_repo="ivykopal/anli_sk",
+    hf_subset="default",
+    hf_avail_splits=["train", "validation", "test"],
+    evaluation_splits=["test"],
+    few_shots_split="train",
+    few_shots_select="random_sampling_from_train",
+    generation_size=5,
+    metric=[Metrics.loglikelihood_acc],
+    stop_sequence=["\n"],
+    trust_dataset=True,
+    version=0,
+)
+
+sk_nli_lighteval = LightevalTaskConfig(
+    name="community_nli_slk",
+    suite=["community"],
+    prompt_function=prompt.anli,
+    hf_repo="slovak-nlp/sklep",
+    hf_subset="nli",
+    hf_avail_splits=["train", "validation", "test"],
+    evaluation_splits=["test"],
+    few_shots_split="train",
+    few_shots_select="random_sampling_from_train",
+    generation_size=5,
+    metrics=[Metrics.loglikelihood_acc],
+    stop_sequence=["\n"],
+    trust_dataset=True,
+    version=0,
+)
+
+nli_lighteval_slovak_prompt = LightevalTaskConfig(
+    name="community_nli_sk_prompt",
+    suite=("community",),
+    prompt_function=skanli,
+    hf_repo="slovak-nlp/sklep",
+    hf_subset="nli",
+    hf_avail_splits=["train", "validation", "test"],
+    evaluation_splits=["test"],
+    few_shots_split="train",
+    few_shots_select="random_sampling_from_train",
+    generation_size=5,
+    metric=[Metrics.loglikelihood_acc],
+    stop_sequence=["\n"],
+    trust_dataset=True,
+    version=0,
+)
+
 TASKS_TABLE = [
     *mlmm_hellaswag_tasks,
     *mlmm_mmlu_tasks,
     *mlmm_arc_challenge_tasks,
     *mlmm_truthfulqa_tasks,
+    sk_anli_lighteval,
+    anli_lighteval_slovak_prompt,
+    sk_nli_lighteval,
+    nli_lighteval_slovak_prompt,
 ]

@@ -178,7 +178,11 @@ class LightevalTaskConfig:
 
             else:
                 if isinstance(v, Callable):
-                    values.append([k, v.__name__])
+                    # check if v is functools.partial
+                    if hasattr(v, "func"):
+                        values.append([k, f"partial({v.func.__name__})"])
+                    else:
+                        values.append([k, v.__name__])
                 else:
                     values.append([k, repr(v)])
 
